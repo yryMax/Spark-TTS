@@ -24,83 +24,22 @@ import platform
 
 from cli.SparkTTS import SparkTTS
 
+model = SparkTTS("pretrained_models/Spark-TTS-0.5B", 'cuda:0')
 
-def parse_args():
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(description="Run TTS inference.")
-
-    parser.add_argument(
-        "--model_dir",
-        type=str,
-        default="pretrained_models/Spark-TTS-0.5B",
-        help="Path to the model directory",
-    )
-    parser.add_argument(
-        "--save_dir",
-        type=str,
-        default="example/results",
-        help="Directory to save generated audio files",
-    )
-    parser.add_argument("--device", type=int, default=0, help="CUDA device number")
-    parser.add_argument(
-        "--text", type=str, required=True, help="Text for TTS generation"
-    )
-    parser.add_argument("--prompt_text", type=str, help="Transcript of prompt audio")
-    parser.add_argument(
-        "--prompt_speech_path",
-        type=str,
-        help="Path to the prompt audio file",
-    )
-    parser.add_argument("--gender", choices=["male", "female"])
-    parser.add_argument(
-        "--pitch", choices=["very_low", "low", "moderate", "high", "very_high"]
-    )
-    parser.add_argument(
-        "--speed", choices=["very_low", "low", "moderate", "high", "very_high"]
-    )
-    return parser.parse_args()
-
-
-def run_tts(args):
-    """Perform TTS inference and save the generated audio."""
-    logging.info(f"Using model from: {args.model_dir}")
-    logging.info(f"Saving audio to: {args.save_dir}")
-
-    # Ensure the save directory exists
-    os.makedirs(args.save_dir, exist_ok=True)
-
-    # Convert device argument to torch.device
-    if platform.system() == "Darwin" and torch.backends.mps.is_available():
-        # macOS with MPS support (Apple Silicon)
-        device = torch.device(f"mps:{args.device}")
-        logging.info(f"Using MPS device: {device}")
-    elif torch.cuda.is_available():
-        # System with CUDA support
-        device = torch.device(f"cuda:{args.device}")
-        logging.info(f"Using CUDA device: {device}")
-    else:
-        # Fall back to CPU
-        device = torch.device("cpu")
-        logging.info("GPU acceleration not available, using CPU")
+def synthesize(args):
 
     # Initialize the model
-    model = SparkTTS(args.model_dir, device)
 
-    # Generate unique filename using timestamp
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    save_path = os.path.join(args.save_dir, f"{timestamp}.wav")
+
+    save_path = args.output_dir
 
     logging.info("Starting inference...")
 
-    # Perform inference and save the output audio
     with torch.no_grad():
         wav = model.inference(
             args.text,
-            args.prompt_speech_path,
+            args.ref_audio,
             prompt_text=args.prompt_text,
-            gender=args.gender,
-            pitch=args.pitch,
-            speed=args.speed,
         )
         sf.write(save_path, wav, samplerate=16000)
 
@@ -108,9 +47,12 @@ def run_tts(args):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    parser = argparse.ArgumentParser(description="SPARK TTS CLI")
+    parser.add_argument("--ref_audio", type=str, required=True, help="Reference audio file")
+    parser.add_argument("--text", type=str, required=True, help="Text to synthesize")
+    parser.add_argument("--output_dir", type=str, required=True, help="Output directory")
+    parser.add_argument("--prompt_text", type=str, required=True, help="Prompt text")
 
-    args = parse_args()
-    run_tts(args)
+    args = parser.parse_args()
+
+    synthesize(args)
